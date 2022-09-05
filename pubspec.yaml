@@ -63,6 +63,9 @@ flutter:
     - assets/images/car.png
     - assets/images/cargif.gif
     - assets/images/carshowroom.jpg
+    - assets/images/door.jpg
+    - assets/images/image1.jpg
+    - assets/images/welcome.jpg
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
