@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi';
 import 'dart:math';
 
@@ -7,6 +8,7 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyMap());
@@ -55,6 +57,10 @@ class MyMapViewState extends State<MymapView> {
   List<LatLng> polyLineCoordinates = [];
 
   Map<PolylineId, Polyline> polylines = {};
+   double startLatitude = 0.0;
+  double startLongitude = 0.0;
+   double destinationLatitude = 0.0;
+   double destinationlongitude = 0.0;
 
   Widget _textField({
     required TextEditingController controller,
@@ -94,7 +100,7 @@ class MyMapViewState extends State<MymapView> {
     );
   }
 
-  Future<bool> _calculateDistance() async {
+  /*Future<bool> _calculateDistance() async {
     try {
       List<Location> startPlacemark = await locationFromAddress(startAddress);
       List<Location> destinationPlacemark =
@@ -191,6 +197,89 @@ class MyMapViewState extends State<MymapView> {
     }
     return false;
   }
+*/
+
+   Future<bool> getDistance({required double startLatitude, required double startLongitude, required double endLatitude, required double endLongitude}) async {
+
+    String Url = 'https://maps.googleapis.com/maps/api/distancematrix/json?destinations=${startLatitude},${startLongitude}'
+        '&origins=${endLatitude},${endLongitude} &  key = ';
+
+    try {
+      var response = await http.get(
+        Uri.parse(Url),);
+      if (response.statusCode == 200) {
+        Map<String, dynamic> userdata = json.decode(response.body);
+        List<Location> startPlacemark = await locationFromAddress(startAddress);
+        List<Location> destinationPlacemark =
+        await locationFromAddress(destinationAddress);
+
+        double startLatitude = startAddress == currentAddress
+            ? currentPosition.latitude
+            : startPlacemark[0].latitude;
+
+        double startLongitude = startAddress == currentAddress
+            ? currentPosition.longitude
+            : startPlacemark[0].longitude;
+
+        double destinationLatitude = destinationPlacemark[0].latitude;
+        double destinationLongitude = destinationPlacemark[0].longitude;
+
+        String startCoordinatesString = "($startLatitude, $startLongitude)";
+        String destinationCoordinatesString =
+            "($destinationLatitude, $destinationLongitude)";
+        await _coordinateDistance(startLatitude,startLongitude,endLatitude,endLongitude);
+        await _createPolylines(startLatitude, startLongitude, destinationLatitude,
+            destinationlongitude);
+        double totalDistance = 0.0;
+
+        for (int i = 0; i < polyLineCoordinates.length - 1; i++) {
+          totalDistance += _coordinateDistance(
+            polyLineCoordinates[i].latitude,
+            polyLineCoordinates[i].longitude,
+            polyLineCoordinates[i + 1].latitude,
+            polyLineCoordinates[i + 1].longitude,
+          );
+        }
+        Marker startmarker = Marker(
+          markerId: MarkerId(startCoordinatesString),
+          position: LatLng(startLatitude, startLongitude),
+          infoWindow: InfoWindow(
+              title: "Start  $startCoordinatesString", snippet: startAddress),
+          icon: BitmapDescriptor.defaultMarker,
+        );
+
+        Marker destinationmarker = Marker(
+          markerId: MarkerId(destinationCoordinatesString),
+          position: LatLng(destinationLatitude, destinationLongitude),
+          infoWindow: InfoWindow(
+              title: "Start  $destinationCoordinatesString",
+              snippet: destinationAddress),
+          icon: BitmapDescriptor.defaultMarkerWithHue(5),
+        );
+
+        markers.add(startmarker);
+        markers.add(destinationmarker);
+
+        print("Start Coordinates : ($startLatitude , $startLongitude)");
+        print(
+            "Destination Coordinates : ($destinationLatitude , $destinationLongitude)");
+
+
+
+        setState(() {
+          placeDistance = totalDistance.toStringAsFixed(2);
+          print("Distance : $placeDistance km");
+        });
+        return jsonDecode("$userdata");
+
+      } else
+        return false;
+    }
+    catch (e) {
+      print(e);
+      return false;
+    }
+  }
 
   double _coordinateDistance(lat1, lon1, lat2, lon2) {
     var p = 0.017453292519943295;
@@ -209,7 +298,7 @@ class MyMapViewState extends State<MymapView> {
   ) async {
     polylinePoints = PolylinePoints();
     PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
-      "AIzaSyCZvvVhR1VHllhG9H4ImVS5UBkV8XPZCnQ",
+      "api key",
       PointLatLng(startLatitude, startLongitude),
       PointLatLng(destinationLatitude, destinationLongitude),
       travelMode: TravelMode.transit,
@@ -240,6 +329,10 @@ class MyMapViewState extends State<MymapView> {
 
 
   Future<Position> _getCurrentLocation() async {
+    bool isLocationServiceEnabled = await Geolocator.isLocationServiceEnabled();
+
+    await Geolocator.checkPermission();
+    await Geolocator.requestPermission();
     await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
         .then((Position position) async {
       setState(() async {
@@ -259,6 +352,7 @@ class MyMapViewState extends State<MymapView> {
     }).catchError((e) {
       print("error in get address $e");
     });
+
     return await Geolocator.getCurrentPosition();
   }
 
@@ -441,7 +535,10 @@ class MyMapViewState extends State<MymapView> {
                                       placeDistance = null;
                                     });
 
-                                    _calculateDistance().then((isCalculated) {
+                                    getDistance(startLatitude: startLatitude,startLongitude: startLongitude,
+                                    endLatitude: destinationLatitude,endLongitude: destinationlongitude)
+                                        .then((isCalculated) {
+                                          SnackBar(content: Text("Destination address $destinationLatitude,$destinationlongitude"),);
                                       if (isCalculated) {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
@@ -459,7 +556,8 @@ class MyMapViewState extends State<MymapView> {
                                           ),
                                         );
                                       }
-                                    });
+                                    }
+                                    );
                                   }
                                 : null,
                             style: ElevatedButton.styleFrom(
